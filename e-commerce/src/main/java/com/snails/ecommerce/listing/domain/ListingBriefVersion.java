@@ -63,6 +63,17 @@ public class ListingBriefVersion {
     @Column(nullable = false)
     private boolean approved;
 
+    /** Brief 版本创建人；系统生成版本固定为 SYSTEM。 */
+    @Column(nullable = false, length = 128)
+    private String createdBy;
+
+    /** 批准该 Brief 版本的操作人，未批准时为空。 */
+    @Column(length = 128)
+    private String approvedBy;
+
+    /** Brief 批准时间，未批准时为空。 */
+    private LocalDateTime approvedAt;
+
     /** 创建时间。 */
     @Column(nullable = false)
     private LocalDateTime createdAt;

@@ -10,6 +10,7 @@ import com.snails.ecommerce.listing.domain.ListingTask;
 import com.snails.ecommerce.listing.domain.ListingTaskStatus;
 import com.snails.ecommerce.listing.domain.ProductRawData;
 import com.snails.ecommerce.template.domain.ImageAssetType;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -62,16 +63,24 @@ class ListingEntityMappingTest {
         brief.setTargetAudience("Amazon US car stereo buyers");
         brief.setCoreSellingPointsJson("[\"Wireless CarPlay\"]");
         brief.setTargetKeywordsJson("[\"car stereo\"]");
-        brief.setApproved(false);
+        brief.setCreatedBy("operator@example.com");
+        brief.setApproved(true);
+        brief.setApprovedBy("reviewer@example.com");
+        brief.setApprovedAt(LocalDateTime.of(2026, 6, 6, 10, 0));
         listingBriefVersionRepository.save(brief);
 
         ListingTask savedTask = listingTaskRepository.findById("task_mapping").orElseThrow();
         ProductRawData savedRawData = productRawDataRepository.findByTaskId("task_mapping").orElseThrow();
-        ListingBriefVersion savedBrief = listingBriefVersionRepository.findTopByTaskIdOrderByCreatedAtDesc("task_mapping").orElseThrow();
+        ListingBriefVersion savedBrief = listingBriefVersionRepository
+                .findTopByTaskIdOrderByCreatedAtDescBriefVersionIdDesc("task_mapping")
+                .orElseThrow();
 
         assertThat(savedTask.getStatus()).isEqualTo(ListingTaskStatus.WAIT_BRIEF_APPROVE);
         assertThat(savedRawData.getProductName()).isEqualTo("9 Inch Car Stereo");
         assertThat(savedBrief.getTargetKeywordsJson()).contains("car stereo");
+        assertThat(savedBrief.getCreatedBy()).isEqualTo("operator@example.com");
+        assertThat(savedBrief.getApprovedBy()).isEqualTo("reviewer@example.com");
+        assertThat(savedBrief.getApprovedAt()).isEqualTo(LocalDateTime.of(2026, 6, 6, 10, 0));
     }
 
     @Test

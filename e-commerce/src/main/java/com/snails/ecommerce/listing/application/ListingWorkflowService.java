@@ -152,7 +152,7 @@ public class ListingWorkflowService {
         ListingTask task = listingTaskRepository.findById(taskId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.TASK_NOT_FOUND, "Listing task not found: " + taskId));
         ListingBriefVersion latestBrief = listingBriefVersionRepository
-                .findTopByTaskIdOrderByCreatedAtDesc(taskId)
+                .findTopByTaskIdOrderByCreatedAtDescBriefVersionIdDesc(taskId)
                 .orElse(null);
 
         return ListingTaskDetailResponse.from(
@@ -231,6 +231,7 @@ public class ListingWorkflowService {
         brief.setImageDirectionPromptsJson("[]");
         brief.setComplianceNotesJson(toJsonStringArray(List.of("Generated from placeholder brief in phase 1.")));
         brief.setApproved(false);
+        brief.setCreatedBy("SYSTEM");
         return brief;
     }
 

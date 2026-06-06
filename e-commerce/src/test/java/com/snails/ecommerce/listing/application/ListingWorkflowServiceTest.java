@@ -101,7 +101,8 @@ class ListingWorkflowServiceTest {
 
         ListingTask task = listingTaskRepository.findById(taskId).orElseThrow();
         ProductRawData rawData = productRawDataRepository.findByTaskId(taskId).orElseThrow();
-        ListingBriefVersion brief = listingBriefVersionRepository.findTopByTaskIdOrderByCreatedAtDesc(taskId)
+        ListingBriefVersion brief = listingBriefVersionRepository
+                .findTopByTaskIdOrderByCreatedAtDescBriefVersionIdDesc(taskId)
                 .orElseThrow();
         CategoryTemplate template = categoryTemplateRepository.findById(task.getCategoryTemplateId()).orElseThrow();
 
@@ -121,6 +122,7 @@ class ListingWorkflowServiceTest {
         assertThat(brief.getTargetAudience()).isEqualTo("Amazon US car stereo buyers");
         assertThat(brief.getCoreSellingPointsJson()).contains("Wireless CarPlay");
         assertThat(brief.isApproved()).isFalse();
+        assertThat(brief.getCreatedBy()).isEqualTo("SYSTEM");
     }
 
     @Test
