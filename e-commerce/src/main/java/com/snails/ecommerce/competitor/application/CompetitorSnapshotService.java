@@ -15,8 +15,10 @@ import com.snails.ecommerce.listing.infrastructure.ListingTaskRepository;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -73,6 +75,50 @@ public class CompetitorSnapshotService {
                 .toList();
 
         return competitorSnapshotRepository.saveAll(entities).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    /**
+     * 查询任务的全部竞品快照历史。
+     *
+     * <p>结果按采集时间倒序返回；采集时间相同时按快照 ID 倒序，保证顺序稳定。</p>
+     *
+     * @param taskId Listing 任务 ID
+     * @return 任务的全部竞品快照
+     */
+    @Transactional(readOnly = true)
+    public List<CompetitorSnapshotResponse> listSnapshots(String taskId) {
+        requireTask(taskId);
+        return competitorSnapshotRepository
+                .findByTaskIdOrderByCapturedAtDescSnapshotIdDesc(taskId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    /**
+     * 查询任务中每个 ASIN 的最新竞品快照。
+     *
+     * <p>输出顺序沿用任务提交时的 ASIN 顺序；尚无快照的 ASIN 不返回。该查询不受任务当前状态限制，
+     * 便于后续生成和审计阶段复用已经固化的竞品数据。</p>
+     *
+     * @param taskId Listing 任务 ID
+     * @return 各 ASIN 的最新竞品快照
+     */
+    @Transactional(readOnly = true)
+    public List<CompetitorSnapshotResponse> listLatestSnapshots(String taskId) {
+        ListingTask task = requireTask(taskId);
+        Map<String, CompetitorSnapshot> latestByAsin = new LinkedHashMap<>();
+        competitorSnapshotRepository
+                .findByTaskIdOrderByCapturedAtDescSnapshotIdDesc(taskId)
+                .forEach(snapshot -> latestByAsin.putIfAbsent(
+                        normalizeAsin(snapshot.getAsin()),
+                        snapshot));
+
+        return readTaskAsins(task).stream()
+                .map(latestByAsin::get)
+                .filter(snapshot -> snapshot != null)
                 .map(this::toResponse)
                 .toList();
     }

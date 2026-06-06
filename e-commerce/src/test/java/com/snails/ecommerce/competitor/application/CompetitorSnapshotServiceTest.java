@@ -9,6 +9,8 @@ import com.snails.ecommerce.common.id.IdGenerator;
 import com.snails.ecommerce.competitor.api.CompetitorSnapshotResponse;
 import com.snails.ecommerce.competitor.api.ManualCompetitorSnapshotRequest;
 import com.snails.ecommerce.competitor.api.SubmitManualCompetitorsRequest;
+import com.snails.ecommerce.competitor.domain.CompetitorSnapshot;
+import com.snails.ecommerce.competitor.domain.CompetitorSourceType;
 import com.snails.ecommerce.competitor.infrastructure.CompetitorSnapshotRepository;
 import com.snails.ecommerce.listing.domain.BriefStatus;
 import com.snails.ecommerce.listing.domain.GenerationStatus;
@@ -16,6 +18,7 @@ import com.snails.ecommerce.listing.domain.ListingTask;
 import com.snails.ecommerce.listing.domain.ListingTaskStatus;
 import com.snails.ecommerce.listing.infrastructure.ListingTaskRepository;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -156,6 +159,76 @@ class CompetitorSnapshotServiceTest {
         assertThat(competitorSnapshotRepository.count()).isZero();
     }
 
+    @Test
+    void listsAllSnapshotsNewestFirst() {
+        ListingTask task = saveTask("task_history", ListingTaskStatus.WAIT_BRIEF_APPROVE);
+        saveSnapshot("competitor_001", task.getTaskId(), "B0FIRST", "First Version",
+                LocalDateTime.of(2026, 6, 6, 10, 0));
+        saveSnapshot("competitor_002", task.getTaskId(), "B0FIRST", "Second Version",
+                LocalDateTime.of(2026, 6, 6, 11, 0));
+
+        List<CompetitorSnapshotResponse> snapshots = service.listSnapshots(task.getTaskId());
+
+        assertThat(snapshots)
+                .extracting(CompetitorSnapshotResponse::snapshotId)
+                .containsExactly("competitor_002", "competitor_001");
+    }
+
+    @Test
+    void listsLatestSnapshotPerAsinInTaskInputOrder() {
+        ListingTask task = saveTask("task_latest", ListingTaskStatus.WAIT_BRIEF_APPROVE);
+        saveSnapshot("competitor_first_old", task.getTaskId(), "B0FIRST", "First Old",
+                LocalDateTime.of(2026, 6, 6, 9, 0));
+        saveSnapshot("competitor_second", task.getTaskId(), "B0SECOND", "Second Latest",
+                LocalDateTime.of(2026, 6, 6, 11, 0));
+        saveSnapshot("competitor_first_new", task.getTaskId(), "B0FIRST", "First Latest",
+                LocalDateTime.of(2026, 6, 6, 12, 0));
+
+        List<CompetitorSnapshotResponse> latest = service.listLatestSnapshots(task.getTaskId());
+
+        assertThat(latest)
+                .extracting(CompetitorSnapshotResponse::asin)
+                .containsExactly("B0FIRST", "B0SECOND");
+        assertThat(latest)
+                .extracting(CompetitorSnapshotResponse::title)
+                .containsExactly("First Latest", "Second Latest");
+    }
+
+    @Test
+    void omitsTaskAsinWithoutSnapshotFromLatestView() {
+        ListingTask task = saveTask("task_partial_latest", ListingTaskStatus.WAIT_BRIEF_APPROVE);
+        saveSnapshot("competitor_first", task.getTaskId(), "B0FIRST", "First Latest",
+                LocalDateTime.of(2026, 6, 6, 12, 0));
+
+        List<CompetitorSnapshotResponse> latest = service.listLatestSnapshots(task.getTaskId());
+
+        assertThat(latest)
+                .extracting(CompetitorSnapshotResponse::asin)
+                .containsExactly("B0FIRST");
+    }
+
+    @Test
+    void allowsQueriesAfterTaskMovesToGenerating() {
+        ListingTask task = saveTask("task_query_generating", ListingTaskStatus.GENERATING);
+        saveSnapshot("competitor_generating", task.getTaskId(), "B0FIRST", "Existing Snapshot",
+                LocalDateTime.of(2026, 6, 6, 12, 0));
+
+        assertThat(service.listSnapshots(task.getTaskId())).hasSize(1);
+        assertThat(service.listLatestSnapshots(task.getTaskId())).hasSize(1);
+    }
+
+    @Test
+    void rejectsQueriesForMissingTask() {
+        assertThatThrownBy(() -> service.listSnapshots("task_missing"))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.TASK_NOT_FOUND);
+        assertThatThrownBy(() -> service.listLatestSnapshots("task_missing"))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.TASK_NOT_FOUND);
+    }
+
     private ListingTask saveTask(String taskId, ListingTaskStatus status) {
         ListingTask task = new ListingTask();
         task.setTaskId(taskId);
@@ -184,5 +257,26 @@ class CompetitorSnapshotServiceTest {
                 List.of("Installation instructions are unclear"),
                 List.of("wireless carplay stereo"),
                 null);
+    }
+
+    private CompetitorSnapshot saveSnapshot(
+            String snapshotId,
+            String taskId,
+            String asin,
+            String title,
+            LocalDateTime capturedAt) {
+        CompetitorSnapshot snapshot = new CompetitorSnapshot();
+        snapshot.setSnapshotId(snapshotId);
+        snapshot.setTaskId(taskId);
+        snapshot.setAsin(asin);
+        snapshot.setTitle(title);
+        snapshot.setBulletPointsJson("[]");
+        snapshot.setReviewPainPointsJson("[]");
+        snapshot.setKeywordSignalsJson("[]");
+        snapshot.setSourceType(CompetitorSourceType.MANUAL);
+        snapshot.setSourceName("Manual Entry");
+        snapshot.setCapturedAt(capturedAt);
+        snapshot.setCreatedBy("operator@example.com");
+        return competitorSnapshotRepository.save(snapshot);
     }
 }
